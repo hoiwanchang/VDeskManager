@@ -1,108 +1,210 @@
-# VDesk Manager - Windows 虚拟桌面管理工具
+# VDesk Manager
 
-通过系统托盘图标快速管理和切换 Windows 虚拟桌面。
+A lightweight Windows desktop environment manager. Manage and switch virtual desktops from your system tray with keyboard shortcuts and a clean menu interface.
 
-## 功能特性
+[![GitHub release (latest by date)](https://img.shields.io/github/v/release/hoiwanchang/VDeskManager)](https://github.com/hoiwanchang/VDeskManager/releases/latest)
+[![Build Status](https://img.shields.io/github/actions/workflow/status/hoiwanchang/VDeskManager/release.yml?branch=master&label=build)](https://github.com/hoiwanchang/VDeskManager/actions/workflows/release.yml)
+[![License: MIT](https://img.shields.io/badge/license-MIT-blue.svg)](LICENSE)
 
-- 🖥️ **系统托盘图标** — 实时显示当前桌面编号和桌面网格概览
-- ⚡ **快速切换** — 右键菜单一键切换任意桌面
-- ➕ **创建桌面** — 快速新建虚拟桌面
-- ✕ **删除桌面** — 选择并移除指定桌面
-- ✎ **重命名桌面** — 为桌面设置有意义的名称
-- ⌨️ **全局热键** — `Ctrl+Alt+←/→` 左右切换桌面
-- 🔄 **自动刷新** — 检测桌面变化实时更新图标和菜单
+## Features
 
-## 系统要求
+- **🖥️ System Tray Icon** — Live grid overview showing your current desktop number and total desktop count
+- **⚡ Quick Switch** — Right-click menu to jump to any desktop instantly
+- **➕ Create Desktops** — Add new virtual desktops with one click
+- **✕ Remove Desktops** — Delete unwanted desktops
+- **✎ Rename Desktops** — Give your desktops meaningful names
+- **⇄ Move Window** — Move the foreground window to any desktop
+- **⌨️ Global Hotkeys** — `Ctrl+Alt+←/→` to switch, `Ctrl+Alt+1-9` to jump to a specific desktop
+- **🔍 Search Desktops** — Filter desktops by name or number (useful with many desktops)
+- **🎬 Toggle Animations** — Control Windows desktop transition animations
+- **🖥️ Multi-Monitor** — Switch desktops on all monitors in sync or independently per monitor
+- **♻️ Auto-Reload Hotkeys** — Modify `hotkeys.json` and see changes apply immediately
+- **⚙️ Config Export/Import** — Backup and restore all settings to a single JSON file
+- **🔀 Window Auto-Route** — Automatically move windows to specific desktops based on class/title rules
+- **📦 Desktop Sets** — Define groups of desktops (e.g. "Work", "Dev") with custom names
+- **📦 Single EXE** — PyInstaller-built standalone executable, no Python required
 
-- Windows 10 (1903+) 或 Windows 11
-- Python 3.10+
+## System Requirements
 
-## 快速开始
+- Windows 10 (1903 / Build 18362+) or Windows 11
+- x64 architecture
 
-### 方式一：直接运行
+## Quick Start
+
+### Option 1: Download Release (Recommended)
+
+1. Download the latest `.exe` from the [Releases page](https://github.com/hoiwanchang/VDeskManager/releases)
+2. Double-click `VDeskManager.exe` — the tray icon appears in the taskbar
+
+### Option 2: Run from Source
 
 ```batch
-:: 安装依赖
+:: Install dependencies
 pip install -r requirements.txt
 
-:: 启动
+:: Launch
 python main.py
 ```
 
-或直接双击 `start.bat`
+Or double-click `start.bat`.
 
-### 方式二：打包为 EXE
+### Option 3: Build from Source
 
 ```batch
 pip install pyinstaller
 build.bat
 ```
 
-打包后生成 `dist/VDeskManager.exe`，双击即可运行，无需 Python 环境。
+Outputs `dist/VDeskManager.exe`.
 
-## 命令行参数
+## Usage
 
-```
-python main.py [OPTIONS]
+After launching, a tray icon appears in the system tray:
 
-选项:
-  --log-level {DEBUG,INFO,WARNING,ERROR}  日志级别 (默认: INFO)
-  --poll-interval FLOAT                    轮询间隔秒数 (默认: 0.8)
-  --no-hotkeys                             禁用全局热键
-```
+| Action | Result |
+|--------|--------|
+| **Left-click** | Open the desktop switch menu |
+| **Right-click** | Open the full feature menu |
+| **Scroll** | Switch to the previous/next desktop |
 
-## 使用方法
+### Keyboard Shortcuts (Default)
 
-1. 启动后，任务栏右下角出现托盘图标
-2. 图标会显示当前桌面位置的网格缩略图
-3. **左键单击** — 弹出桌面切换菜单
-4. **右键单击** — 完整功能菜单（切换/创建/删除/重命名）
+| Hotkey | Action |
+|--------|--------|
+| `Ctrl+Alt+←` | Previous desktop |
+| `Ctrl+Alt+→` | Next desktop |
+| `Ctrl+Alt+1` – `Ctrl+Alt+9` | Jump to desktop 1-9 |
 
-### 快捷键
+Customize hotkeys in `~/.vdesk-manager/hotkeys.json` (edit → the app auto-reloads).
 
-| 快捷键 | 功能 |
-|--------|------|
-| `Ctrl+Alt+←` | 切换到上一个桌面 |
-| `Ctrl+Alt+→` | 切换到下一个桌面 |
+### Tray Icon Modes
 
-### 图标说明
+The icon adapts to your desktop count:
 
-托盘图标会根据桌面数量自动切换显示模式：
+| Desktops | Display |
+|----------|---------|
+| 1–4 | 2×2 grid with active desktop highlighted in blue |
+| 5–9 | 3×3 grid with active desktop highlighted in blue |
+| 10+ | Current desktop number |
 
-- **1-4 个桌面** → 2×2 网格，当前桌面高亮
-- **5-9 个桌面** → 3×3 网格，当前桌面高亮
-- **10+ 个桌面** → 显示当前桌面编号
+### CLI Quick Commands
 
-## 项目结构
-
-```
-vdesk-manager/
-├── main.py               # 主入口
-├── start.bat             # Windows 启动脚本
-├── build.bat             # PyInstaller 打包脚本
-├── requirements.txt      # Python 依赖
-├── README.md             # 本文档
-└── src/
-    ├── __init__.py
-    ├── desktop_manager.py  # 虚拟桌面核心管理
-    ├── tray_icon.py        # 系统托盘指示器
-    └── icon_generator.py   # 动态图标生成
+```batch
+python main.py --switch 3                  :: Switch to desktop 3, then exit
+python main.py --switch-dir 1              :: Move to the next desktop, then exit
+python main.py --create                    :: Create a new desktop, then exit
+python main.py --delete 2                  :: Delete desktop 2, then exit
+python main.py --move-window 4             :: Move foreground window to desktop 4, then exit
+python main.py --rename 1 "Work"           :: Rename desktop 1 to "Work", then exit
+python main.py --log-level DEBUG           :: Enable debug logging
+python main.py --no-hotkeys                :: Run without global hotkeys
 ```
 
-## 技术栈
+### Multi-Monitor Switching
 
-| 组件 | 技术 |
-|------|------|
-| 虚拟桌面 API | [pyvda](https://github.com/mirober/pyvda) — Windows Virtual Desktop COM API 封装 |
-| 系统托盘 | [pystray](https://github.com/moses-palmer/pystray) — 跨平台系统托盘库 |
-| 图标生成 | [Pillow](https://python-pillow.org/) — 图像处理 |
-| 打包 | PyInstaller — 单文件 EXE |
+Go to **⚙ Config → Multi-Monitor** to choose:
 
-## 注意事项
+- **Sync** — All monitors switch to the same desktop together (default)
+- **Independent** — Each monitor maintains its own set of virtual desktops
 
-- 虚拟桌面 API 依赖 Windows 未公开的 COM 接口，极少数 Windows 更新可能导致临时失效
-- 日志文件位于 `~/.vdesk-manager/logs/vdesk.log`
-- 如热键冲突，使用 `--no-hotkeys` 禁用
+Requires Windows 11.
+
+### Window Auto-Route
+
+Define rules to automatically move windows to specific desktops. Edit `~/.vdesk-manager/win_autoroute.json`:
+
+```json
+{
+  "rules": [
+    {
+      "target_desktop": 1,
+      "name_contains": "Chrome",
+      "class_name": ""
+    },
+    {
+      "target_desktop": 2,
+      "name_contains": "VS Code",
+      "class_name": ""
+    }
+  ]
+}
+```
+
+Rules are matched in order. Empty `class_name` or `name_contains` means that filter is ignored.
+
+## Project Structure
+
+```
+VDeskManager/
+├── main.py                    # Entry point
+├── start.bat                  # Windows launcher
+├── build.bat                  # PyInstaller build script
+├── requirements.txt           # Python dependencies
+├── VDeskManager.spec          # PyInstaller spec file
+├── CHANGELOG.md               # Version history
+├── pyproject.toml             # Project config + pytest settings
+├── assets/                    # Icons and images
+│   └── vdesk_manager_icon.png # Application icon
+├── src/
+│   ├── __init__.py
+│   ├── version.py             # Version info
+│   ├── desktop_manager.py     # Core virtual desktop management
+│   ├── tray_icon.py           # System tray indicator & menu
+│   ├── icon_generator.py      # Dynamic icon rendering (Pillow)
+│   ├── hotkey_manager.py      # Global hotkey registration
+│   ├── autostart.py           # Boot via Windows Task Scheduler
+│   ├── name_manager.py        # Desktop ID-to-name mapping
+│   ├── desktop_sets.py        # Desktop group definitions
+│   ├── win_autoroute.py       # Window auto-routing rules
+│   ├── config_export.py       # Config backup/restore
+│   ├── monitor_manager.py     # Multi-monitor enumeration
+│   └── switch_animation.py    # Animation toggle via registry
+└── tests/                     # Unit tests
+    ├── conftest.py
+    ├── test_version.py
+    ├── test_icon_generator.py
+    ├── test_hotkey_manager.py
+    └── test_switch_animation.py
+```
+
+## Configuration
+
+All settings are stored in `~/.vdesk-manager/`:
+
+| File | Purpose |
+|------|---------|
+| `hotkeys.json` | Keyboard shortcut definitions |
+| `desktop_names.json` | Desktop ID → name mappings (persists through reordering) |
+| `desktop_sets.json` | Desktop group definitions |
+| `win_autoroute.json` | Window auto-routing rules |
+| `logs/vdesk.log` | Application log (rotating, 5MB × 5 backups) |
+
+## Build & Release
+
+This project uses GitHub Actions to build releases automatically.
+
+1. Push a git tag `v*`:
+   ```bash
+   git tag -a v1.3.0 -m "v1.3.0 - feature description"
+   git push origin v1.3.0
+   ```
+2. The `release.yml` workflow builds a single-file EXE via PyInstaller
+3. An asset `VDeskManager.exe` is uploaded to the GitHub Release
+
+## Dependencies
+
+| Package | Purpose |
+|---------|---------|
+| [pyvda](https://github.com/mirober/pyvda) | Windows Virtual Desktop COM API wrapper |
+| [pystray](https://github.com/moses-palmer/pystray) | Cross-platform system tray icon |
+| [Pillow](https://python-pillow.org/) | Image rendering for tray icons |
+| [pynput](https://github.com/moses-palmer/pynput) | Global keyboard hooks |
+
+## Known Limitations
+
+- Virtual desktop APIs use undocumented Windows COM interfaces; occasional Windows updates may temporarily break functionality
+- Per-monitor virtual desktops require Windows 11
+- Global hotkeys may conflict with system or third-party software (use the conflict detector or `--no-hotkeys`)
 
 ## License
 
