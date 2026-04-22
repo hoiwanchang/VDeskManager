@@ -106,6 +106,15 @@ class TrayIconApp:
         # ── 管理操作 ──
         items.append(pystray.MenuItem("＋ 新建桌面", self._action_create))
 
+        # 移动窗口到桌面子菜单
+        move_items = []
+        for desk in desktops:
+            move_items.append(pystray.MenuItem(
+                f"移动窗口到 {desk.name}",
+                self._make_move_window_action(desk.index),
+            ))
+        items.append(pystray.MenuItem("⇄ 移动当前窗口到", pystray.Menu(*move_items)))
+
         # 删除桌面子菜单
         if len(desktops) > 1:
             remove_items = []
@@ -133,6 +142,14 @@ class TrayIconApp:
             hk_items.append(pystray.MenuItem("✎ 编辑配置文件", self._action_edit_hotkeys))
             hk_items.append(pystray.MenuItem("↻  重新加载快捷键", self._action_reload_hotkeys))
             items.append(pystray.MenuItem("⌨ 快捷键", pystray.Menu(*hk_items)))
+
+        # ── 配置管理 ──
+        cfg_items = []
+        cfg_items.append(pystray.MenuItem("⬆ 导出配置", self._action_export_config))
+        cfg_items.append(pystray.MenuItem("⬇ 导入配置", self._action_import_config))
+        items.append(pystray.MenuItem("⚙ 配置", pystray.Menu(*cfg_items)))
+
+        items.append(pystray.Menu.SEPARATOR)
 
         # ── 其他 ──
         items.append(pystray.MenuItem("⊞ 打开任务视图", self._action_task_view))
@@ -199,6 +216,17 @@ class TrayIconApp:
         t = threading.Thread(target=_worker, daemon=True, name="VDesk-Action")
         t.start()
 
+    def _notify(self, message: str, title: str = "VDesk Manager"):
+        """发送系统通知（线程安全）"""
+        def _do():
+            if self._icon:
+                try:
+                    self._icon.notify(message, title)
+                except Exception as e:
+                    logger.debug(f"通知发送失败: {e}")
+        t = threading.Thread(target=_do, daemon=True, name="VDesk-Notify")
+        t.start()
+
     def _poll_desktop_changes(self):
         """后台轮询桌面变化"""
         while self._running:
@@ -244,6 +272,17 @@ class TrayIconApp:
             self.manager.create_desktop()
             self._schedule_refresh(delay=0.4)
         self._run_in_thread(_do)
+
+    def _make_move_window_action(self, index: int):
+        """创建移动窗口到桌面的 action 回调"""
+        def action(icon, item):
+            def _do():
+                success = self.manager.move_foreground_window_to_desktop(index)
+                if success:
+                    self._notify(f"窗口已移动到桌面 {index}", "VDesk Manager")
+                    self._schedule_refresh(delay=0.3)
+            self._run_in_thread(_do)
+        return action
 
     def _make_remove_action(self, index: int):
         """创建删除桌面的 action 回调"""
@@ -296,6 +335,8 @@ class TrayIconApp:
             logger.warning("tkinter 不可用，无法弹出重命名对话框")
         except Exception as e:
             logger.error(f"重命名对话框失败: {e}")
+        finally:
+            self._rename_dialog_active = False
 
     def _action_task_view(self, icon, item):
         """模拟 Win+Tab 打开任务视图"""
@@ -322,6 +363,45 @@ class TrayIconApp:
         """重新加载快捷键配置"""
         if self.hotkey_manager:
             self.hotkey_manager.reload()
+
+    def _action_export_config(self, icon, item):
+        """导出所有配置"""
+        def _do():
+            try:
+                from .config_export import export_all_config
+                path = export_all_config()
+                self._notify(f"配置已导出: {os.path.basename(path)}", "VDesk Manager")
+            except Exception as e:
+                logger.error(f"导出配置失败: {e}")
+                self._icon.notify("导出失败，请查看日志", "VDesk Manager")
+        self._run_in_thread(_do)
+
+    def _action_import_config(self, icon, item):
+        """导入配置（需要用户选择文件，用 tkinter 文件对话框）"""
+        def _do():
+            try:
+                import tkinter as tk
+                from tkinter import filedialog
+                root = tk.Tk()
+                root.withdraw()
+                filepath = filedialog.askopenfilename(
+                    title="选择配置备份文件",
+                    filetypes=[("JSON 文件", "*.json")],
+                )
+                root.destroy()
+                if not filepath:
+                    return
+                from .config_export import import_config
+                success = import_config(filepath)
+                if success:
+                    self._notify("配置已导入，请重启应用生效", "VDesk Manager")
+                    self._schedule_refresh(delay=0.5)
+                else:
+                    self._notify("导入失败，请检查文件格式", "VDesk Manager")
+            except Exception as e:
+                logger.error(f"导入配置失败: {e}")
+                self._icon.notify("导入失败，请查看日志", "VDesk Manager")
+        self._run_in_thread(_do)
 
     def _is_autostart_enabled(self) -> bool:
         """检查开机自启动是否已启用"""

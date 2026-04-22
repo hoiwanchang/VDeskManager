@@ -154,6 +154,54 @@ class HotkeyManager:
         self._ready_event = threading.Event()
         self._running = False
 
+        # 配置文件自动检测
+        self._config_mtime: float = 0.0
+        self._config_watch_thread: threading.Thread | None = None
+        self._config_watch_running = False
+
+    # ── 配置自动检测 ──
+
+    def _watch_config_file(self):
+        """后台检测配置文件变化，有变化时自动重载"""
+        while self._config_watch_running:
+            try:
+                if os.path.exists(self._config_path):
+                    current_mtime = os.path.getmtime(self._config_path)
+                    if current_mtime != self._config_mtime:
+                        logger.info("检测到快捷键配置变化，自动重载...")
+                        self.load_config()
+                        self._config_mtime = current_mtime
+                        # 重启快捷键线程以应用新配置
+                        self.stop()
+                        time.sleep(0.2)
+                        self._thread = None
+                        self.start()
+            except Exception as e:
+                logger.debug(f"配置文件检测出错: {e}")
+            time.sleep(2)
+
+    def _start_config_watch(self):
+        """启动配置文件监控线程"""
+        if self._config_watch_running:
+            return
+        self._config_watch_running = True
+        # 初始化 mtime
+        if os.path.exists(self._config_path):
+            self._config_mtime = os.path.getmtime(self._config_path)
+        self._config_watch_thread = threading.Thread(
+            target=self._watch_config_file,
+            daemon=True,
+            name="VDesk-ConfigWatch",
+        )
+        self._config_watch_thread.start()
+
+    def _stop_config_watch(self):
+        """停止配置文件监控"""
+        self._config_watch_running = False
+        if self._config_watch_thread:
+            self._config_watch_thread.join(timeout=3)
+            self._config_watch_thread = None
+
     # ── 配置管理 ──
 
     def load_config(self) -> dict:
@@ -224,12 +272,18 @@ class HotkeyManager:
         # 等待线程就绪
         self._ready_event.wait(timeout=5)
 
+        # 启动配置文件监控
+        self._start_config_watch()
+
     def stop(self):
         """停止快捷键监听"""
         if not self._running:
             return
 
         self._running = False
+
+        # 停止配置文件监控
+        self._stop_config_watch()
 
         # 向线程发送 WM_QUIT 以退出消息循环
         if self._thread_id:
@@ -243,8 +297,9 @@ class HotkeyManager:
     def reload(self):
         """重新加载配置并重启快捷键"""
         logger.info("正在重新加载快捷键配置...")
-        self.stop()
+        self._stop_config_watch()
         time.sleep(0.2)
+        self._thread = None
         self.start()
         summary = self.get_registered_summary()
         if summary:

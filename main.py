@@ -29,11 +29,16 @@ def setup_logging(level: str = "INFO"):
     os.makedirs(log_dir, exist_ok=True)
     log_file = os.path.join(log_dir, "vdesk.log")
 
+    from logging.handlers import RotatingFileHandler
+
     logging.basicConfig(
         level=getattr(logging, level.upper(), logging.INFO),
         format="%(asctime)s [%(levelname)s] %(name)s: %(message)s",
         handlers=[
-            logging.FileHandler(log_file, encoding="utf-8"),
+            RotatingFileHandler(
+                log_file, maxBytes=5 * 1024 * 1024, backupCount=5,
+                encoding="utf-8"
+            ),
             logging.StreamHandler(sys.stdout),
         ]
     )
@@ -78,17 +83,10 @@ def check_dependencies():
         missing.append("Pillow")
 
     if missing:
-        print("缺少依赖包，正在安装...")
-        import subprocess
-        try:
-            subprocess.check_call(
-                [sys.executable, "-m", "pip", "install"] + missing,
-                creationflags=0x08000000 if sys.platform == "win32" else 0,
-            )
-            print("依赖安装完成！")
-        except subprocess.CalledProcessError:
-            print(f"自动安装失败，请手动执行: pip install {' '.join(missing)}")
-            sys.exit(1)
+        msg = f"缺少依赖包: {', '.join(missing)}\n请执行: pip install {' '.join(missing)}"
+        print(msg)
+        logger.error(msg)
+        sys.exit(1)
 
 
 def main():
