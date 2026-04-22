@@ -47,14 +47,15 @@ jobs:
           $tag = "${{ github.ref_name }}"
           $archiveName = "VDeskManager-$tag.zip"
           
-          # Find the actual build output directory
-          $buildDir = Get-ChildItem -Directory "dist" | Select-Object -First 1
-          if ($buildDir) {
-            Write-Host "Found build dir: $($buildDir.Name)"
-            Compress-Archive -Path "dist\$($buildDir.Name)\*" -DestinationPath "dist\$archiveName" -Force
+          # PyInstaller outputs dist/VDeskManager.exe (single file)
+          # Compress the dist directory contents
+          if (Test-Path "dist\VDeskManager.exe") {
+            Compress-Archive -Path "dist\VDeskManager.exe" -DestinationPath "dist\$archiveName" -Force
+            Write-Host "Created archive with VDeskManager.exe"
           } else {
-            Write-Error "No build output found under dist/"
-            exit 1
+            # Fallback: compress everything in dist/
+            Compress-Archive -Path "dist\*" -DestinationPath "dist\$archiveName" -Force
+            Write-Host "Created archive with dist/ contents"
           }
           echo "ARCHIVE_NAME=$archiveName" | Out-File -FilePath $env:GITHUB_ENV -Encoding utf8 -Append
 
