@@ -20,6 +20,8 @@ import logging
 import argparse
 import ctypes
 
+from src.version import __version__, __app_name__
+
 
 def setup_logging(level: str = "INFO"):
     """配置日志"""
@@ -138,8 +140,6 @@ def main():
     setup_logging(args.log_level)
     logger = logging.getLogger("vdesk")
 
-    # 显示版本号
-    from src.version import __version__, __app_name__
     logger.info(f"{__app_name__} v{__version__} 启动")
     logger.info("=" * 50)
 
