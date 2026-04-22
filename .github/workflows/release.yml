@@ -1,0 +1,55 @@
+name: Release
+
+on:
+  push:
+    tags:
+      - 'v*'
+  workflow_dispatch:
+
+permissions:
+  contents: write
+
+jobs:
+  build:
+    runs-on: windows-latest
+
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v4
+
+      - name: Set up Python
+        uses: actions/setup-python@v5
+        with:
+          python-version: '3.12'
+          cache: 'pip'
+
+      - name: Install dependencies
+        run: |
+          python -m pip install --upgrade pip
+          pip install -r requirements.txt
+          pip install pyinstaller>=6.0
+
+      - name: Build with PyInstaller
+        run: |
+          pyinstaller VDeskManager.spec --noconfirm
+
+      - name: Create archive
+        run: |
+          $tag = "${{ github.ref_name }}"
+          $archiveName = "VDeskManager-$tag.zip"
+          Compress-Archive -Path "dist\VDeskManager\*" -DestinationPath "dist\$archiveName" -Force
+          echo "ARCHIVE_NAME=$archiveName" | Out-File -FilePath $env:GITHUB_ENV -Encoding utf8 -Append
+
+      - name: Download Release Asset (optional fallback)
+        env:
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+        run: |
+          echo "Preparing release for ${{ github.ref_name }}"
+
+      - name: Create GitHub Release
+        uses: softprops/action-gh-release@v2
+        with:
+          files: dist/${{ env.ARCHIVE_NAME }}
+          generate_release_notes: true
+          draft: false
+          prerelease: false
