@@ -53,9 +53,14 @@ def generate_tray_icon(current: int, total: int) -> Image.Image:
     img = Image.new("RGBA", (size, size), (0, 0, 0, 0))
     draw = ImageDraw.Draw(img)
 
-    # 圆角背景
-    draw_rounded_rect(draw, (2, 2, size - 3, size - 3), radius=12,
-                      fill=COLORS["bg_dark"], outline=COLORS["border"], width=1)
+    # 圆角背景 (使用 Pillow 原生 rounded_rectangle)
+    draw.rounded_rectangle(
+        (2, 2, size - 3, size - 3),
+        radius=12,
+        fill=COLORS["bg_dark"],
+        outline=COLORS["border"],
+        width=1,
+    )
 
     if total <= 4:
         _draw_grid_2x2(draw, current, total, size)
@@ -81,8 +86,11 @@ def _draw_grid_2x2(draw: ImageDraw.Draw, current: int, total: int, size: int):
         is_current = (i + 1 == current)
         color = COLORS["bg_active"] if is_current else COLORS["bg_inactive"]
 
-        draw_rounded_rect(draw, (x, y, x + cell_w, y + cell_h),
-                          radius=4, fill=color)
+        draw.rounded_rectangle(
+            (x, y, x + cell_w, y + cell_h),
+            radius=4,
+            fill=color,
+        )
 
         if is_current:
             # 添加小圆点指示器
@@ -107,8 +115,11 @@ def _draw_grid_3x3(draw: ImageDraw.Draw, current: int, total: int, size: int):
         is_current = (i + 1 == current)
         color = COLORS["bg_active"] if is_current else COLORS["bg_inactive"]
 
-        draw_rounded_rect(draw, (x, y, x + cell_w, y + cell_h),
-                          radius=3, fill=color)
+        draw.rounded_rectangle(
+            (x, y, x + cell_w, y + cell_h),
+            radius=3,
+            fill=color,
+        )
 
 
 def _draw_number(draw: ImageDraw.Draw, current: int, size: int):
@@ -130,7 +141,11 @@ def generate_desktop_icon(index: int, total: int, is_current: bool = False) -> I
     draw = ImageDraw.Draw(img)
 
     color = COLORS["bg_active"] if is_current else COLORS["bg_inactive"]
-    draw_rounded_rect(draw, (2, 2, size - 3, size - 3), radius=6, fill=color)
+    draw.rounded_rectangle(
+        (2, 2, size - 3, size - 3),
+        radius=6,
+        fill=color,
+    )
 
     font = _get_font(16)
     text = str(index)
@@ -142,33 +157,6 @@ def generate_desktop_icon(index: int, total: int, is_current: bool = False) -> I
     draw.text((x, y), text, fill=COLORS["text_primary"], font=font)
 
     return img
-
-
-def draw_rounded_rect(draw: ImageDraw.Draw, bbox: tuple,
-                      radius: int = 8,
-                      fill: tuple = None,
-                      outline: tuple = None,
-                      width: int = 0):
-    """绘制圆角矩形"""
-    x1, y1, x2, y2 = bbox
-    r = min(radius, (x2 - x1) // 2, (y2 - y1) // 2)
-
-    # 四个角的圆
-    draw.ellipse((x1, y1, x1 + 2 * r, y1 + 2 * r), fill=fill, outline=outline, width=width)
-    draw.ellipse((x2 - 2 * r, y1, x2, y1 + 2 * r), fill=fill, outline=outline, width=width)
-    draw.ellipse((x1, y2 - 2 * r, x1 + 2 * r, y2), fill=fill, outline=outline, width=width)
-    draw.ellipse((x2 - 2 * r, y2 - 2 * r, x2, y2), fill=fill, outline=outline, width=width)
-
-    # 中间矩形
-    draw.rectangle((x1 + r, y1, x2 - r, y2), fill=fill, outline=outline, width=width)
-    draw.rectangle((x1, y1 + r, x2, y2 - r), fill=fill, outline=outline, width=width)
-
-    # 如果有描边，用线段覆盖连接处避免重叠
-    if outline and width > 0:
-        draw.line([(x1 + r, y1), (x2 - r, y1)], fill=fill, width=width)
-        draw.line([(x1 + r, y2), (x2 - r, y2)], fill=fill, width=width)
-        draw.line([(x1, y1 + r), (x1, y2 - r)], fill=fill, width=width)
-        draw.line([(x2, y1 + r), (x2, y2 - r)], fill=fill, width=width)
 
 
 if __name__ == "__main__":

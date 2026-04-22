@@ -20,6 +20,32 @@ from typing import Callable
 
 logger = logging.getLogger("vdesk")
 
+# ── 已知系统/常见应用快捷键冲突表 ──
+# key: (modifiers, vk) → 用途
+KNOWN_CONFLICTS = {
+    (0, 0x5B): "左 Win 键（系统保留）",
+    (0, 0x5C): "右 Win 键（系统保留）",
+    (0x08, 0x09): "Alt+Tab（切换窗口）",
+    (0x08, 0x11): "Alt+Ctrl（系统保留）",
+    (0x04, 0x11): "Ctrl+Shift+Esc（任务管理器）",
+    (0x12, 0x54): "Alt+T（浏览器新标签）",
+    (0x12, 0x4E): "Alt+N（Outlook 新建）",
+    (0x12, 0x45): "Alt+E（Outlook 回复）",
+    (0x11, 0x54): "Ctrl+T（浏览器新标签）",
+    (0x11, 0x57): "Ctrl+W（关闭标签）",
+    (0x11, 0x52): "Ctrl+R（刷新）",
+    (0x11, 0x46): "Ctrl+F（查找）",
+    (0x04, 0x09): "Ctrl+Tab（切换标签）",
+    (0x04, 0x53): "Ctrl+S（保存）",
+    (0x04, 0x5A): "Ctrl+Z（撤销）",
+    (0x12, 0x464): "F4（任务管理器）",
+    (0x52, 0x44): "RWin+D（显示桌面）",
+    (0x52, 0x4C): "RWin+L（锁屏）",
+    (0x52, 0x45): "RWin+E（文件资源管理器）",
+    (0x52, 0x54): "RWin+T（任务栏预览）",
+    (0x52, 0x41): "RWin+A（操作中心）",
+}
+
 user32 = ctypes.windll.user32
 kernel32 = ctypes.windll.kernel32
 
@@ -251,6 +277,24 @@ class HotkeyManager:
             lines.append(f"{key} → {desc}")
         return lines
 
+    def detect_conflicts(self) -> list[str]:
+        """
+        检测当前配置中的快捷键与已知系统/应用快捷键的冲突
+
+        :return: 冲突列表，格式为 ["Ctrl+Alt+Up → Alt+T (浏览器新标签)"]
+        """
+        conflicts = []
+        for key_desc, hk_str in self._config.get("hotkeys", {}).items():
+            if not hk_str:
+                continue
+            modifiers, vk = parse_hotkey(hk_str)
+            if vk is None:
+                continue
+            if (modifiers, vk) in KNOWN_CONFLICTS:
+                purpose = KNOWN_CONFLICTS[(modifiers, vk)]
+                conflicts.append(f"{key_desc}: {hk_str} → {purpose}")
+        return conflicts
+
     # ── 生命周期 ──
 
     def start(self):
@@ -304,6 +348,12 @@ class HotkeyManager:
         summary = self.get_registered_summary()
         if summary:
             logger.info("快捷键已重新加载:\n  " + "\n  ".join(summary))
+
+        # 检测快捷键冲突
+        conflicts = self.detect_conflicts()
+        if conflicts:
+            logger.warning("⚠ 检测到快捷键冲突:\n  " + "\n  ".join(conflicts))
+        return conflicts
 
     def open_config_file(self):
         """用记事本打开配置文件"""

@@ -9,6 +9,7 @@ pystray 回调约定：
 """
 
 import logging
+import os
 import threading
 import time
 from typing import Callable, Optional
@@ -141,12 +142,22 @@ class TrayIconApp:
             hk_items = []
             hk_items.append(pystray.MenuItem("✎ 编辑配置文件", self._action_edit_hotkeys))
             hk_items.append(pystray.MenuItem("↻  重新加载快捷键", self._action_reload_hotkeys))
+            hk_items.append(pystray.MenuItem("⚠ 查看快捷键冲突", self._action_check_hotkey_conflicts))
             items.append(pystray.MenuItem("⌨ 快捷键", pystray.Menu(*hk_items)))
 
         # ── 配置管理 ──
         cfg_items = []
         cfg_items.append(pystray.MenuItem("⬆ 导出配置", self._action_export_config))
         cfg_items.append(pystray.MenuItem("⬇ 导入配置", self._action_import_config))
+
+        # ── 动画开关 ──
+        from .switch_animation import get_switch_animation_enabled
+        anim_enabled = get_switch_animation_enabled()
+        cfg_items.append(pystray.MenuItem(
+            "🎬 切换动画" + (" [已开]" if anim_enabled else " [已关]"),
+            self._action_toggle_animation
+        ))
+
         items.append(pystray.MenuItem("⚙ 配置", pystray.Menu(*cfg_items)))
 
         items.append(pystray.Menu.SEPARATOR)
@@ -364,6 +375,18 @@ class TrayIconApp:
         if self.hotkey_manager:
             self.hotkey_manager.reload()
 
+    def _action_check_hotkey_conflicts(self, icon, item):
+        """查看快捷键冲突"""
+        if not self.hotkey_manager:
+            return
+        conflicts = self.hotkey_manager.detect_conflicts()
+        if conflicts:
+            msg = "检测到以下快捷键冲突:\n" + "\n".join(f"  • {c}" for c in conflicts)
+            msg += "\n\n建议修改 ~/.vdesk-manager/hotkeys.json 中的快捷键配置。"
+        else:
+            msg = "✅ 未检测到已知快捷键冲突！"
+        self._icon.notify(msg, "VDesk Manager")
+
     def _action_export_config(self, icon, item):
         """导出所有配置"""
         def _do():
@@ -402,6 +425,15 @@ class TrayIconApp:
                 logger.error(f"导入配置失败: {e}")
                 self._icon.notify("导入失败，请查看日志", "VDesk Manager")
         self._run_in_thread(_do)
+
+    def _action_toggle_animation(self, icon, item):
+        """切换桌面切换动画"""
+        from .switch_animation import toggle_switch_animation
+        enabled = toggle_switch_animation()
+        self._notify(
+            f"桌面切换动画已 {'启用' if enabled else '禁用'}\n(需重启资源管理器生效)",
+            "VDesk Manager",
+        )
 
     def _is_autostart_enabled(self) -> bool:
         """检查开机自启动是否已启用"""

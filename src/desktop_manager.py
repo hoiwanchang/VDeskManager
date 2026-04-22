@@ -5,13 +5,20 @@
 适配 pyvda >= 0.5.0：
   - get_current_desktop() 已移除，改为 VirtualDesktop.current()
   - Desktop 对象有 number, id, name, go(), remove(), rename() 等属性/方法
+
+多显示器支持：
+  - 统一模式：所有显示器同步切换（pyvda 直接切换当前桌面）
+  - 独立模式：找到每个显示器上的前台窗口，分别移动到目标桌面
 """
 
 import ctypes
 import logging
+import os
+import threading
 from typing import Optional
 
 user32 = ctypes.windll.user32
+shcore = ctypes.windll.shcore
 
 logger = logging.getLogger("vdesk")
 
@@ -254,3 +261,166 @@ class DesktopManager:
         except Exception as e:
             logger.error(f"移动前台窗口失败: {e}")
             return False
+
+    def switch_by_offset_multi_monitor(self, offset: int, mode: str = "sync") -> dict:
+        """
+        多显示器桌面切换
+        
+        :param offset: -1=上一个, 1=下一个
+        :param mode: "sync"=统一切换所有显示器, "independent"=独立切换每个显示器
+        :return: {"mode": str, "results": [(monitor_name, success), ...]}
+        """
+        try:
+            if mode == "sync":
+                # 统一切换：直接切换到目标桌面
+                success = self.switch_by_offset(offset)
+                return {"mode": "sync", "results": [("all", success)]}
+            else:
+                # 独立切换：找到每个显示器上的前台窗口，分别移动到目标桌面
+                return self._switch_independent(offset)
+        except Exception as e:
+            logger.error(f"多显示器切换失败: {e}")
+            return {"mode": mode, "results": []}
+
+    def _switch_independent(self, offset: int) -> dict:
+        """
+        独立切换每个显示器上的桌面
+        
+        原理：找到每个显示器上的前台窗口，获取其所在桌面索引，然后切换到目标桌面索引。
+        使用 pyvda.ViewVirtualDesktop 将窗口移动到目标桌面。
+        """
+        try:
+            # 获取所有显示器
+            monitors = self._get_monitors()
+            if not monitors:
+                return {"mode": "independent", "results": []}
+
+            results = []
+            desktops = self.get_desktops()
+            total = len(desktops)
+            if total == 0:
+                return {"mode": "independent", "results": []}
+
+            for monitor in monitors:
+                # 找到该显示器上的前台窗口
+                hwnd = self._get_foreground_window_for_monitor(monitor)
+                if not hwnd:
+                    results.append((monitor["name"], False))
+                    continue
+
+                # 找到该窗口当前所在的桌面索引
+                current_index = self._get_desktop_index_for_window(hwnd, desktops)
+                if current_index is None:
+                    # 窗口不在任何桌面（可能在桌面1），或出错，使用索引1
+                    current_index = 0
+
+                # 计算目标桌面索引
+                target_index = current_index + offset
+                if target_index < 0:
+                    target_index = total - 1
+                elif target_index >= total:
+                    target_index = 0
+
+                # 移动到目标桌面（索引从0开始）
+                target_desktop = desktops[target_index]
+                try:
+                    _pyvda.ViewVirtualDesktop(hwnd, target_desktop.hwnd)
+                    results.append((monitor["name"], True))
+                    logger.info(
+                        f"独立切换: {monitor['name']} 窗口 0x{hwnd:x} "
+                        f"桌面 {current_index+1} → {target_index+1}"
+                    )
+                except Exception as e:
+                    logger.error(f"移动窗口到目标桌面失败: {e}")
+                    results.append((monitor["name"], False))
+
+            return {"mode": "independent", "results": results}
+        except Exception as e:
+            logger.error(f"独立切换失败: {e}")
+            return {"mode": "independent", "results": []}
+
+    def _get_monitors(self) -> list[dict]:
+        """枚举所有显示器"""
+        monitors = []
+        wintypes = __import__("ctypes").wintypes
+
+        def enum_callback(hMonitor, hdcMonitor, lprcBounds, lParam):
+            info = wintypes.MONITORINFO()
+            info.cbSize = ctypes.sizeof(wintypes.MONITORINFO)
+            user32.GetMonitorInfoW(hMonitor, ctypes.byref(info))
+
+            name = f"Monitor_{info.rcMonitor[0]}_{info.rcMonitor[1]}"
+            is_primary = bool(info.dwFlags & 0x01)
+
+            monitors.append({
+                "handle": hMonitor,
+                "name": name,
+                "left": info.rcMonitor[0],
+                "top": info.rcMonitor[1],
+                "right": info.rcMonitor[2],
+                "bottom": info.rcMonitor[3],
+                "is_primary": is_primary,
+                "width": info.rcMonitor[2] - info.rcMonitor[0],
+                "height": info.rcMonitor[3] - info.rcMonitor[1],
+            })
+            return True
+
+        user32.EnumDisplayMonitors(None, None, ctypes.WINFUNCTYPE(
+            ctypes.c_bool, ctypes.c_void_p, ctypes.c_void_p,
+            ctypes.POINTER(wintypes.RECT), ctypes.c_ulong
+        )(enum_callback), 0)
+
+        return monitors
+
+    def _get_foreground_window_for_monitor(self, monitor: dict) -> Optional[int]:
+        """获取指定显示器上的前台窗口"""
+        try:
+            # 获取该显示器上的所有可见窗口
+            hwnds = []
+
+            def enum_callback(hwnd, lParam):
+                if user32.IsWindowVisible(hwnd):
+                    # 获取窗口矩形
+                    rect = wintypes.RECT()
+                    user32.GetWindowRect(hwnd, ctypes.byref(rect))
+                    # 检查窗口是否在该显示器区域内
+                    center_x = (rect.left + rect.right) // 2
+                    center_y = (rect.top + rect.bottom) // 2
+                    if (monitor["left"] <= center_x < monitor["right"] and
+                            monitor["top"] <= center_y < monitor["bottom"]):
+                        hwnds.append(hwnd)
+                return True
+
+            user32.EnumWindows(ctypes.WINFUNCTYPE(
+                ctypes.c_bool, ctypes.c_uint64, ctypes.c_ulong
+            )(enum_callback), 0)
+
+            if hwnds:
+                # 返回 Z 序最前的窗口（列表第一个）
+                return hwnds[0]
+            return None
+        except Exception as e:
+            logger.debug(f"获取显示器 {monitor['name']} 前台窗口失败: {e}")
+            return None
+
+    def _get_desktop_index_for_window(self, hwnd: int, desktops: list) -> Optional[int]:
+        """
+        获取窗口所在的桌面索引
+        
+        使用 IVirtualDesktopManager.IsWindowOnCurrentVirtualDesktop 判断
+        每个桌面是否包含该窗口。
+        
+        由于 IVirtualDesktopManager 是内部 API，这里采用简化方案：
+        默认返回当前桌面的索引。如果需要精确检测每个窗口的桌面归属，
+        需要安装 pywin32 并使用 ctypes 调用 COM。
+        """
+        try:
+            # 简化方案：返回当前桌面的索引
+            current = _VirtualDesktop.current()
+            for i, desk in enumerate(desktops):
+                if desk.id == current.id:
+                    return i
+            return None
+        except Exception as e:
+            logger.debug(f"获取窗口桌面索引失败: {e}")
+            return None

@@ -18,9 +18,8 @@ import sys
 import os
 import logging
 import argparse
-
-# 确保可以作为模块运行
-sys.path.insert(0, os.path.dirname(os.path.abspath(__file__)))
+import ctypes
+import win32gui
 
 
 def setup_logging(level: str = "INFO"):
@@ -94,6 +93,10 @@ def main():
         description="VDesk Manager - Windows 虚拟桌面管理工具"
     )
     parser.add_argument(
+        "--version", action="version",
+        version=f"VDesk Manager v{__version__} ({__app_name__})",
+    )
+    parser.add_argument(
         "--log-level", default="INFO",
         choices=["DEBUG", "INFO", "WARNING", "ERROR"],
         help="日志级别 (默认: INFO)"
@@ -106,20 +109,98 @@ def main():
         "--no-hotkeys", action="store_true",
         help="禁用全局快捷键"
     )
+    # ── 命令行快捷操作（P15） ──
+    parser.add_argument(
+        "--switch", type=int, metavar="N",
+        help="切换到第 N 个桌面 (从 1 开始)，执行后退出"
+    )
+    parser.add_argument(
+        "--switch-dir", type=int, metavar="DIR",
+        help="相对切换桌面 (-1=上一个, 1=下一个)，执行后退出"
+    )
+    parser.add_argument(
+        "--create", action="store_true",
+        help="创建新桌面，执行后退出"
+    )
+    parser.add_argument(
+        "--delete", type=int, metavar="N",
+        help="删除第 N 个桌面 (从 1 开始)，执行后退出"
+    )
+    parser.add_argument(
+        "--move-window", type=int, metavar="N",
+        help="将前台窗口移动到第 N 个桌面，执行后退出"
+    )
+    parser.add_argument(
+        "--rename", nargs=2, metavar=("N", "NAME"),
+        help="重命名第 N 个桌面为 NAME，执行后退出"
+    )
     args = parser.parse_args()
 
     setup_logging(args.log_level)
     logger = logging.getLogger("vdesk")
 
-    logger.info("=" * 50)
-    logger.info("VDesk Manager 启动")
+    # 显示版本号
+    from src.version import __version__, __app_name__
+    logger.info(f"{__app_name__} v{__version__} 启动")
     logger.info("=" * 50)
 
     check_platform()
     check_dependencies()
 
     from src.tray_icon import TrayIconApp
+    from src.desktop_manager import DesktopManager
 
+    # ── 命令行快捷操作模式 ──
+    if args.switch is not None:
+        logger.info(f"命令行模式: 切换到桌面 {args.switch}")
+        manager = DesktopManager()
+        success = manager.switch_to(args.switch)
+        logger.info(f"切换结果: {'成功' if success else '失败'}")
+        sys.exit(0 if success else 1)
+
+    if args.switch_dir is not None:
+        logger.info(f"命令行模式: 相对切换桌面 {args.switch_dir}")
+        manager = DesktopManager()
+        success = manager.switch_by_offset(args.switch_dir)
+        logger.info(f"切换结果: {'成功' if success else '失败'}")
+        sys.exit(0 if success else 1)
+
+    if args.create:
+        logger.info("命令行模式: 创建新桌面")
+        manager = DesktopManager()
+        success = manager.create_desktop()
+        logger.info(f"创建结果: {'成功' if success else '失败'}")
+        sys.exit(0 if success else 1)
+
+    if args.delete is not None:
+        logger.info(f"命令行模式: 删除桌面 {args.delete}")
+        manager = DesktopManager()
+        success = manager.remove_desktop(args.delete)
+        logger.info(f"删除结果: {'成功' if success else '失败'}")
+        sys.exit(0 if success else 1)
+
+    if args.move_window is not None:
+        logger.info(f"命令行模式: 移动窗口到桌面 {args.move_window}")
+        manager = DesktopManager()
+        success = manager.move_foreground_window_to_desktop(args.move_window)
+        logger.info(f"移动结果: {'成功' if success else '失败'}")
+        sys.exit(0 if success else 1)
+
+    if args.rename is not None:
+        idx, name = args.rename
+        try:
+            idx = int(idx)
+        except ValueError:
+            logger.error(f"无效的桌面序号: {idx}")
+            sys.exit(1)
+        logger.info(f"命令行模式: 重命名桌面 {idx} 为 '{name}'")
+        manager = DesktopManager()
+        success = manager.rename_desktop(idx, name)
+        logger.info(f"重命名结果: {'成功' if success else '失败'}")
+        sys.exit(0 if success else 1)
+
+    # ── 正常托盘模式 ──
+    logger.info("=" * 50)
     app = TrayIconApp(poll_interval=args.poll_interval)
 
     if not args.no_hotkeys:
