@@ -33,18 +33,37 @@ jobs:
         run: |
           pyinstaller VDeskManager.spec --noconfirm
 
+      - name: List build output
+        run: |
+          if (Test-Path "dist\VDeskManager") {
+            Get-ChildItem -Recurse "dist\VDeskManager" | Format-Table -AutoSize
+          } else {
+            Write-Host "dist\VDeskManager not found. Listing dist/:"
+            Get-ChildItem -Recurse "dist" | Format-Table -AutoSize
+          }
+
       - name: Create archive
         run: |
           $tag = "${{ github.ref_name }}"
           $archiveName = "VDeskManager-$tag.zip"
-          Compress-Archive -Path "dist\VDeskManager\*" -DestinationPath "dist\$archiveName" -Force
+          
+          # Find the actual build output directory
+          $buildDir = Get-ChildItem -Directory "dist" | Select-Object -First 1
+          if ($buildDir) {
+            Write-Host "Found build dir: $($buildDir.Name)"
+            Compress-Archive -Path "dist\$($buildDir.Name)\*" -DestinationPath "dist\$archiveName" -Force
+          } else {
+            Write-Error "No build output found under dist/"
+            exit 1
+          }
           echo "ARCHIVE_NAME=$archiveName" | Out-File -FilePath $env:GITHUB_ENV -Encoding utf8 -Append
 
-      - name: Download Release Asset (optional fallback)
+      - name: Upload release asset
         env:
           GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
         run: |
-          echo "Preparing release for ${{ github.ref_name }}"
+          Write-Host "Archive ready: dist/${{ env.ARCHIVE_NAME }}"
+          Get-ChildItem "dist/${{ env.ARCHIVE_NAME }}" | Format-Table -AutoSize
 
       - name: Create GitHub Release
         uses: softprops/action-gh-release@v2
