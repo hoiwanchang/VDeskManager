@@ -87,6 +87,12 @@ class TrayIconApp:
         items.append(pystray.Menu.SEPARATOR)
 
         # ── 桌面列表（快速切换）──
+        search_item = pystray.MenuItem(
+            "🔍 搜索桌面",
+            self._action_search_desktop,
+        )
+        items.append(search_item)
+
         for desk in desktops:
             label = f"{'● ' if desk.is_current else '  '}{desk.name}"
             items.append(pystray.MenuItem(
@@ -426,6 +432,114 @@ class TrayIconApp:
                 self._icon.notify("导入失败，请查看日志", "VDesk Manager")
         self._run_in_thread(_do)
 
+    def _action_search_desktop(self, icon, item):
+        """搜索桌面并切换到匹配的桌面"""
+        def _do():
+            try:
+                import tkinter as tk
+                from tkinter import ttk
+                import re
+
+                desktops = self.manager.get_desktops()
+                if not desktops:
+                    self._notify("没有可用的桌面", "VDesk Manager")
+                    return
+
+                # 创建搜索窗口
+                search_root = tk.Tk()
+                search_root.title("搜索桌面")
+                search_root.geometry("400x300")
+                search_root.resizable(False, False)
+                search_root.transient()
+                search_root.grab_set()
+                search_root.focus_force()
+
+                # 居中窗口
+                search_root.update_idletasks()
+                x = (search_root.winfo_screenwidth() - 400) // 2
+                y = (search_root.winfo_screenheight() - 300) // 2
+                search_root.geometry(f"+{x}+{y}")
+
+                # 搜索输入框
+                search_var = tk.StringVar()
+                search_entry = ttk.Entry(
+                    search_root,
+                    textvariable=search_var,
+                    font=("Microsoft YaHei UI", 12),
+                )
+                search_entry.pack(fill="x", padx=20, pady=(20, 10))
+                search_entry.focus_set()
+
+                # 结果列表框
+                listbox = tk.Listbox(
+                    search_root,
+                    font=("Microsoft YaHei UI", 11),
+                    selectmode="single",
+                )
+                listbox.pack(fill="both", expand=True, padx=20, pady=10)
+
+                # 滚动条
+                scrollbar = ttk.Scrollbar(search_root, orient="vertical", command=listbox.yview)
+                scrollbar.pack(side="right", fill="y")
+                listbox.configure(yscrollcommand=scrollbar.set)
+
+                def update_results(*args):
+                    """根据搜索关键词更新结果列表"""
+                    listbox.delete(0, "end")
+                    query = search_var.get().strip().lower()
+
+                    if not query:
+                        # 显示所有桌面
+                        for desk in desktops:
+                            marker = "● " if desk.is_current else "  "
+                            listbox.insert("end", f"{marker}{desk.index}. {desk.name}")
+                    else:
+                        # 过滤匹配的桌面
+                        for desk in desktops:
+                            if query in desk.name.lower() or str(desk.index) == query:
+                                marker = "● " if desk.is_current else "  "
+                                listbox.insert("end", f"{marker}{desk.index}. {desk.name}")
+
+                search_var.trace_add("write", update_results)
+                update_results()  # 初始化
+
+                def on_select(event):
+                    """双击或选择后切换到对应桌面"""
+                    selection = listbox.curselection()
+                    if not selection:
+                        return
+                    selected_index = selection[0]
+                    item_text = listbox.get(selected_index)
+                    # 解析桌面序号 (格式: "X. 桌面名")
+                    try:
+                        idx = int(item_text.split(".")[0].strip())
+                    except (ValueError, IndexError):
+                        return
+
+                    # 切换到对应桌面
+                    search_root.destroy()
+                    self.manager.switch_to(idx)
+                    self._schedule_refresh(delay=0.3)
+
+                def on_enter(event):
+                    """回车键切换"""
+                    on_select(None)
+
+                listbox.bind("<<ListboxSelect>>", on_select)
+                listbox.bind("<Double-1>", on_select)
+                search_root.bind("<Return>", on_enter)
+                search_root.bind("<Escape>", lambda e: search_root.destroy())
+
+                search_root.mainloop()
+
+            except ImportError:
+                logger.warning("tkinter 不可用，无法弹出搜索对话框")
+            except Exception as e:
+                logger.error(f"搜索对话框失败: {e}")
+                self._notify("搜索失败，请查看日志", "VDesk Manager")
+
+        self._run_in_thread(_do)
+
     def _action_toggle_animation(self, icon, item):
         """切换桌面切换动画"""
         from .switch_animation import toggle_switch_animation
@@ -472,9 +586,19 @@ class TrayIconApp:
     # ── 生命周期 ──
 
     def run(self):
-        """启动托盘应用（阻塞主线程）"""
-        logger.info("VDesk Manager 启动中...")
+        """启动托盘应用（阻塞主线程，不显示任何窗口）"""
+        logger.info("VDesk Manager 启动中... (仅托盘模式)")
         self._running = True
+        
+        # 确保没有可见窗口（如果有 tkinter 窗口残留）
+        try:
+            import tkinter as tk
+            root = tk.Tk()
+            root.withdraw()  # 隐藏 tkinter 窗口
+            root.destroy()   # 销毁它
+        except Exception:
+            pass  # 可能 tkinter 还未初始化或已销毁
+        
         self._icon = self._create_icon()
 
         # 启动轮询线程
@@ -485,7 +609,7 @@ class TrayIconApp:
         )
         self._poll_thread.start()
 
-        logger.info("VDesk Manager 已启动，托盘图标就绪")
+        logger.info("VDesk Manager 已启动，仅显示托盘图标")
         self._icon.run()
 
     def run_detached(self):

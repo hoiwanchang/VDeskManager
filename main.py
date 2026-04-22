@@ -19,7 +19,6 @@ import os
 import logging
 import argparse
 import ctypes
-import win32gui
 
 
 def setup_logging(level: str = "INFO"):
@@ -84,7 +83,7 @@ def check_dependencies():
     if missing:
         msg = f"缺少依赖包: {', '.join(missing)}\n请执行: pip install {' '.join(missing)}"
         print(msg)
-        logger.error(msg)
+        # Note: logger not available at this point, using print
         sys.exit(1)
 
 

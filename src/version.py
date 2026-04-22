@@ -2,7 +2,7 @@
 版本号定义
 """
 
-__version__ = "1.1.0"
+__version__ = "1.2.0"
 __app_name__ = "VDesk Manager"
 __author__ = "Kane Chang"
 __author_email__ = "hoiwanchang@users.noreply.github.com"
